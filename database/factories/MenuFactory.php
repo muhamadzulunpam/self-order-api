@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Menu;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Models\Category;
 
 /**
  * @extends Factory<Menu>
@@ -18,7 +19,12 @@ class MenuFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'category_id' => Category::factory(),
+            'name' => fake()->unique()->words(3, true),
+            'description' => fake()->sentence(),
+            'price' => fake()->numberBetween(5, 50) * 1000,
+            'has_spice_level' => false,
+            'is_available' => true,
         ];
     }
 }
