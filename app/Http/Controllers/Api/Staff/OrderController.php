@@ -4,14 +4,14 @@ namespace App\Http\Controllers\Api\Staff;
 
 use App\Enums\OrderStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Staff\UpdateOrderStatusRequest;
 use App\Http\Resources\StaffOrderResource;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Services\OrderService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
-use App\Http\Requests\Staff\UpdateOrderStatusRequest;
-use App\Services\OrderService;
 
 class OrderController extends Controller
 {
@@ -37,6 +37,7 @@ class OrderController extends Controller
 
         return StaffOrderResource::collection($orders);
     }
+
     public function updateStatus(
         UpdateOrderStatusRequest $request,
         Order $order,

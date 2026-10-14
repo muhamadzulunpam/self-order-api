@@ -11,9 +11,7 @@ class OrderStatusUpdated implements ShouldBroadcast, ShouldDispatchAfterCommit
 {
     use Dispatchable;
 
-    public function __construct(public string $orderCode, public string $status)
-    {
-    }
+    public function __construct(public string $orderCode, public string $status) {}
 
     public function broadcastOn(): array
     {

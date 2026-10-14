@@ -10,12 +10,9 @@ use App\Models\Order;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 
-
 class OrderController extends Controller
 {
-    public function __construct(private OrderService $orders)
-    {
-    }
+    public function __construct(private OrderService $orders) {}
 
     public function store(StoreOrderRequest $request, string $qrToken): JsonResponse
     {
