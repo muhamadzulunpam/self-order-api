@@ -21,6 +21,7 @@ class PublicOrderResource extends JsonResource
             'table_number' => $this->diningTable->number,
             'customer_name' => $this->customer_name,
             'notes' => $this->notes,
+            'payment_status' => $this->payment?->status->value,
             'total_amount' => $this->total_amount,
             'items' => $this->items->map(fn ($item) => [
                 'menu_name' => $item->menu_name,

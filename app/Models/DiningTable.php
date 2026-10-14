@@ -43,4 +43,8 @@ class DiningTable extends Model
             ->where('is_active', true)
             ->first();
     }
+    public function findOrderByCode(string $orderCode): ?Order
+    {
+        return $this->orders()->where('order_code', $orderCode)->first();
+    }
 }
