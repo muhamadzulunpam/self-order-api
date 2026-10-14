@@ -2,9 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
 use App\Models\DiningTable;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class DiningTableSeeder extends Seeder
 {
@@ -14,7 +14,10 @@ class DiningTableSeeder extends Seeder
     public function run(): void
     {
         foreach (range(1, 10) as $number) {
-            DiningTable::firstOrCreate(['number' => $number]);
+            DiningTable::firstOrCreate(
+                ['number' => $number],
+                ['qr_token' => (string) Str::uuid()]
+            );
         }
     }
 }

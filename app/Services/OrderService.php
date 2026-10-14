@@ -3,16 +3,16 @@
 namespace App\Services;
 
 use App\Enums\OrderStatus;
-use App\Models\DiningTable;
-use App\Models\Menu;
-use App\Models\Order;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use App\Enums\UserRole;
 use App\Events\OrderStatusUpdated;
 use App\Events\StaffOrderUpdated;
+use App\Models\DiningTable;
+use App\Models\Menu;
+use App\Models\Order;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class OrderService
 {
@@ -86,6 +86,7 @@ class OrderService
 
         return $code;
     }
+
     public function updateStatus(Order $order, OrderStatus $target, User $actor): Order
     {
         abort_unless(

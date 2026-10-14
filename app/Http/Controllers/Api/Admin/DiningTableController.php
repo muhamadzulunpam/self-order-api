@@ -69,7 +69,7 @@ class DiningTableController extends Controller
     public function qr(Request $request, DiningTable $diningTable): Response
     {
         $result = (new Builder(
-            writer: new SvgWriter(),
+            writer: new SvgWriter,
             data: $diningTable->orderUrl(),
             size: 400,
             margin: 16,

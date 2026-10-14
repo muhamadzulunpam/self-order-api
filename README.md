@@ -1,58 +1,156 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Self-Order QR Menu API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+![Tests](https://github.com/muhamadzulunpam/self-order-api/actions/workflows/tests.yml/badge.svg)
 
-## About Laravel
+Backend sistem pemesanan mandiri untuk restoran: pembeli scan QR code di meja, memilih menu dari HP, membayar lewat Midtrans, dan pesanan langsung muncul secara real-time di layar dapur, tanpa pelayan dan tanpa refresh halaman.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Proyek portofolio yang dibangun fitur demi fitur dengan alur Git branch dan pull request. Frontend (React) dibangun di repositori terpisah.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Fitur
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **QR per meja**: token unik tiap meja, QR dapat diunduh sebagai SVG, token bisa dibuat ulang jika QR bocor
+- **Menu publik tanpa login**: menu dikelompokkan per kategori, hanya menu yang tersedia
+- **Pemesanan aman**: harga dan total dihitung ulang di server, seluruh pesanan disimpan dalam satu transaksi database, nama dan harga menu disimpan sebagai snapshot
+- **Pembayaran Midtrans Snap**: webhook diverifikasi signature (SHA512), nominal dicocokkan, notifikasi duplikat aman (idempotent)
+- **Real-time dengan Laravel Reverb**: pesanan yang sudah dibayar langsung masuk ke dapur, perubahan status langsung sampai ke pembeli
+- **Alur status pesanan ketat**: `paid → preparing → ready → completed`, dibatasi per role (dapur, kasir, admin), aman terhadap klik bersamaan
+- **Role dan autentikasi**: Laravel Sanctum (token), role admin, kasir, dapur
+- **Test otomatis dan CI**: feature test termasuk satu alur end-to-end, dijalankan GitHub Actions di setiap PR
 
-## Learning Laravel
+## Teknologi
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Laravel, PHP 8.2+, MySQL, Laravel Sanctum, Laravel Reverb (WebSocket), Midtrans Snap, endroid/qr-code, PHPUnit, GitHub Actions.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Alur sistem
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+```mermaid
+sequenceDiagram
+    actor Pembeli
+    participant API as Laravel API
+    participant MT as Midtrans
+    participant Dapur as Layar Dapur
 
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+    Pembeli->>API: Scan QR, ambil menu (token meja)
+    Pembeli->>API: Buat pesanan (status pending_payment)
+    Pembeli->>API: Minta Snap token
+    API->>MT: Buat transaksi
+    Pembeli->>MT: Bayar (QRIS, VA, e-wallet)
+    MT->>API: Webhook (signature diverifikasi)
+    API->>API: Pesanan menjadi paid
+    API-->>Dapur: Event real-time (Reverb)
+    Dapur->>API: Ubah status: dimasak, siap
+    API-->>Pembeli: Status pesanan real-time
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Instalasi
 
-## Contributing
+Kebutuhan: PHP 8.2+, Composer, MySQL.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+git clone https://github.com/USERNAME/self-order-api.git
+cd self-order-api
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-## Code of Conduct
+Buat database MySQL (misalnya `self_order`), lalu atur `.env`:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```env
+DB_CONNECTION=mysql
+DB_DATABASE=self_order
+DB_USERNAME=root
+DB_PASSWORD=
 
-## Security Vulnerabilities
+FRONTEND_URL=http://localhost:5173
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+MIDTRANS_SERVER_KEY=      # dari dashboard Midtrans Sandbox
+MIDTRANS_CLIENT_KEY=
+MIDTRANS_IS_PRODUCTION=false
+```
 
-## License
+Jalankan migrasi dan seeder data demo:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan migrate --seed
+php artisan storage:link
+```
+
+### Akun demo (hanya untuk development)
+
+| Role  | Email             | Password |
+|-------|-------------------|----------|
+| Admin | admin@example.com | password |
+| Kasir | kasir@example.com | password |
+| Dapur | dapur@example.com | password |
+
+Seeder juga membuat 3 kategori, 9 menu (satu sengaja tidak tersedia), dan 10 meja. **Jangan menjalankan seeder ini di production**, dan ganti semua password demo.
+
+## Menjalankan
+
+Buka tiga terminal:
+
+```bash
+php artisan serve                  # API di http://localhost:8000
+php artisan reverb:start --debug   # server WebSocket
+php artisan queue:listen           # worker antrean (event broadcast)
+```
+
+## Dokumentasi API
+
+Dokumentasi interaktif (Swagger UI) tersedia di `http://localhost:8000/docs/index.html`.
+Spesifikasinya ada di [`public/docs/openapi.yaml`](public/docs/openapi.yaml) dan bisa diimpor ke Postman (Import, pilih file).
+
+Ringkasan endpoint:
+
+| Area | Endpoint | Akses |
+|------|----------|-------|
+| Auth | `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | Login: publik, lainnya: token |
+| Admin | `/api/admin/categories`, `/api/admin/menus`, `/api/admin/dining-tables` (+ `regenerate-token`, `qr`) | Admin |
+| Pelanggan | `GET /api/public/tables/{token}/menu` | Publik |
+| Pelanggan | `POST /api/public/tables/{token}/orders` | Publik |
+| Pelanggan | `GET /api/public/tables/{token}/orders/{code}` | Publik |
+| Pelanggan | `POST /api/public/tables/{token}/orders/{code}/pay` | Publik |
+| Staf | `GET /api/staff/orders`, `PATCH /api/staff/orders/{id}/status` | Admin, kasir, dapur (aturan per role) |
+| Webhook | `POST /api/webhooks/midtrans` | Midtrans (verifikasi signature) |
+
+## Event real-time
+
+| Channel | Event | Isi | Pendengar |
+|---------|-------|-----|-----------|
+| `private-staff.orders` | `order.paid` | Pesanan lengkap | Dapur, kasir |
+| `private-staff.orders` | `order.updated` | Pesanan lengkap setelah status berubah | Dapur, kasir |
+| `orders.{kode}` (publik) | `order.status-updated` | Kode pesanan dan status | Pembeli |
+
+Channel privat memakai Bearer token Sanctum lewat `POST /api/broadcasting/auth`. Channel pembeli bersifat publik karena pembeli tidak punya akun. Kode pesanan acak dan payload hanya berisi kode serta status, dan frontend tetap mengambil data dari endpoint status pesanan.
+
+## Menguji pembayaran secara lokal
+
+1. Buat pesanan dan minta Snap token, lalu buka `redirect_url` dan bayar lewat Midtrans Payment Simulator.
+2. Agar webhook sampai ke komputer Anda, buat URL publik sementara (ngrok atau cloudflared) dan daftarkan `https://URL-ANDA/api/webhooks/midtrans` sebagai Payment Notification URL di dashboard Sandbox.
+
+## Testing
+
+```bash
+php artisan test
+./vendor/bin/pint --test   # cek gaya kode
+```
+
+Test mencakup autentikasi, CRUD admin, menu publik, pembuatan pesanan, pembayaran dan webhook, event real-time, alur status, seeder, dan satu alur end-to-end dari scan QR sampai pesanan selesai.
+
+## Catatan keamanan dan desain
+
+- Harga tidak pernah dipercaya dari client, selalu dihitung ulang dari database.
+- Status pesanan hanya berubah lewat webhook yang signature-nya valid, bukan callback browser.
+- Row lock (`lockForUpdate`) mencegah pembayaran ganda dan loncatan status akibat request bersamaan.
+- Rate limit pada login dan pembuatan pesanan; respons 404 generik agar token meja tidak bisa ditebak.
+- Menu, meja, dan pesanan dengan riwayat tidak dihapus permanen, cukup dinonaktifkan.
+
+## Rencana berikutnya
+
+- Frontend React (halaman pembeli dan layar dapur)
+- Deploy (VPS atau layanan gratis)
+- Pembatalan dan refund pesanan
+- Laporan penjualan 
+
+

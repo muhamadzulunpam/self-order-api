@@ -1,0 +1,888 @@
+# public/docs/openapi.yaml
+openapi: 3.0.3
+info:
+  title: Self-Order QR Menu API
+  version: 1.0.0
+  description: |
+    Backend sistem pemesanan mandiri (menu digital di meja) lewat QR code.
+
+    **Alur singkat:** pembeli scan QR meja, memilih menu, membayar lewat Midtrans, lalu pesanan
+    muncul real-time di layar dapur.
+
+    **Autentikasi staf:** panggil `POST /auth/login`, lalu kirim token di header
+    `Authorization: Bearer <token>`. Klik tombol **Authorize** di halaman ini untuk mengisinya.
+
+    **Selalu kirim header `Accept: application/json`** agar error berupa JSON, bukan redirect.
+
+    **Real-time (Laravel Reverb):** event WebSocket tidak bisa dijelaskan di OpenAPI, lihat bagian
+    "Event real-time" di README.
+servers:
+  - url: http://localhost:8000/api
+    description: Lokal
+tags:
+  - name: Auth
+    description: Login staf
+  - name: Admin
+    description: Kelola kategori, menu, dan meja (khusus admin)
+  - name: Pelanggan
+    description: Endpoint publik untuk pembeli (tanpa login, memakai token meja)
+  - name: Staf
+    description: Pesanan untuk dapur dan kasir
+  - name: Webhook
+    description: Notifikasi dari Midtrans
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login staf
+      description: Dibatasi 5 percobaan per menit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: admin@example.com }
+                password: { type: string, example: password }
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+                      token: { type: string, example: "1|AbCdEfGh..." }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (menghapus token yang sedang dipakai)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Profil pengguna yang sedang login
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Data pengguna
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /admin/categories:
+    get:
+      tags: [Admin]
+      summary: Daftar kategori
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Daftar kategori, diurutkan berdasarkan sort_order lalu nama
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Buat kategori
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+      responses:
+        '201':
+          description: Kategori dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/categories/{category}:
+    parameters:
+      - { name: category, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Admin]
+      summary: Detail kategori
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Detail kategori
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Admin]
+      summary: Ubah kategori
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+      responses:
+        '200':
+          description: Kategori diubah
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Category' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Hapus kategori
+      description: Ditolak (409) jika kategori masih memiliki menu.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/menus:
+    get:
+      tags: [Admin]
+      summary: Daftar menu (dengan pagination, 15 per halaman)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: category_id, in: query, schema: { type: integer } }
+        - { name: search, in: query, description: Cari berdasarkan nama, schema: { type: string } }
+        - { name: is_available, in: query, schema: { type: boolean } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Daftar menu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Menu' }
+                  links: { type: object }
+                  meta: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Buat menu
+      description: Kirim sebagai `multipart/form-data`. Untuk boolean kirim `1` atau `0`.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/MenuInput' }
+      responses:
+        '201':
+          description: Menu dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Menu' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/menus/{menu}:
+    parameters:
+      - { name: menu, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Admin]
+      summary: Detail menu
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Detail menu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Menu' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Admin]
+      summary: Ubah menu
+      description: |
+        PHP tidak membaca file pada request `PUT`. Untuk mengunggah gambar, kirim
+        `POST /admin/menus/{menu}` dengan field tambahan `_method=PUT` (method spoofing).
+        Gambar lama otomatis dihapus saat diganti.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: '#/components/schemas/MenuInput' }
+      responses:
+        '200':
+          description: Menu diubah
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Menu' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Hapus menu
+      description: Ditolak (409) jika menu sudah pernah dipesan. Nonaktifkan dengan `is_available = false`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/dining-tables:
+    get:
+      tags: [Admin]
+      summary: Daftar meja
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Daftar meja
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/DiningTable' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin]
+      summary: Buat meja
+      description: Token QR dibuat otomatis oleh server.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiningTableInput' }
+      responses:
+        '201':
+          description: Meja dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DiningTable' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/dining-tables/{diningTable}:
+    parameters:
+      - { name: diningTable, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Admin]
+      summary: Detail meja
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Detail meja
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DiningTable' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Admin]
+      summary: Ubah meja (token QR tidak berubah)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiningTableInput' }
+      responses:
+        '200':
+          description: Meja diubah
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DiningTable' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Admin]
+      summary: Hapus meja
+      description: Ditolak (409) jika meja sudah punya riwayat pesanan. Nonaktifkan dengan `is_active = false`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /admin/dining-tables/{diningTable}/regenerate-token:
+    parameters:
+      - { name: diningTable, in: path, required: true, schema: { type: integer } }
+    post:
+      tags: [Admin]
+      summary: Buat ulang token QR (QR lama langsung tidak berlaku)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Token baru dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/DiningTable' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /admin/dining-tables/{diningTable}/qr:
+    parameters:
+      - { name: diningTable, in: path, required: true, schema: { type: integer } }
+    get:
+      tags: [Admin]
+      summary: Gambar QR meja (SVG)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: download, in: query, description: Isi 1 untuk mengunduh sebagai file, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Gambar QR
+          content:
+            image/svg+xml:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/tables/{qrToken}/menu:
+    parameters:
+      - { $ref: '#/components/parameters/QrToken' }
+    get:
+      tags: [Pelanggan]
+      summary: Menu yang tersedia untuk sebuah meja
+      description: Token salah dan meja nonaktif sama-sama menghasilkan 404.
+      responses:
+        '200':
+          description: Nomor meja dan menu per kategori
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      table:
+                        type: object
+                        properties:
+                          number: { type: integer, example: 5 }
+                      categories:
+                        type: array
+                        items: { $ref: '#/components/schemas/PublicCategory' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/tables/{qrToken}/orders:
+    parameters:
+      - { $ref: '#/components/parameters/QrToken' }
+    post:
+      tags: [Pelanggan]
+      summary: Buat pesanan
+      description: |
+        Harga dan total dihitung ulang di server (field harga dari client diabaikan).
+        Menu yang tidak tersedia menggagalkan seluruh pesanan. Dibatasi 10 request per menit per meja.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrderRequest' }
+      responses:
+        '201':
+          description: Pesanan dibuat dengan status pending_payment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/PublicOrder' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /public/tables/{qrToken}/orders/{orderCode}:
+    parameters:
+      - { $ref: '#/components/parameters/QrToken' }
+      - { $ref: '#/components/parameters/OrderCode' }
+    get:
+      tags: [Pelanggan]
+      summary: Status pesanan
+      description: Perlu kombinasi token meja dan kode pesanan, jadi pesanan meja lain tidak bisa dilihat.
+      responses:
+        '200':
+          description: Detail dan status pesanan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/PublicOrder' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/tables/{qrToken}/orders/{orderCode}/pay:
+    parameters:
+      - { $ref: '#/components/parameters/QrToken' }
+      - { $ref: '#/components/parameters/OrderCode' }
+    post:
+      tags: [Pelanggan]
+      summary: Minta Snap token Midtrans
+      description: |
+        Memanggil endpoint ini berulang akan mengembalikan token yang sama.
+        Status pesanan hanya berubah lewat webhook, bukan lewat callback di browser.
+      responses:
+        '200':
+          description: Data untuk membuka Snap
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      order_code: { type: string }
+                      snap_token: { type: string }
+                      redirect_url: { type: string, format: uri, nullable: true }
+                      client_key: { type: string }
+                      is_production: { type: boolean }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '502':
+          description: Payment gateway tidak dapat dihubungi atau menolak permintaan
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+
+  /staff/orders:
+    get:
+      tags: [Staf]
+      summary: Daftar pesanan (untuk layar dapur dan kasir)
+      description: |
+        Default hanya pesanan aktif (`paid`, `preparing`, `ready`), diurutkan berdasarkan waktu bayar.
+        Role yang diizinkan: admin, cashier, kitchen.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: status
+          in: query
+          description: 'Contoh: `?status[]=completed`'
+          schema:
+            type: array
+            items: { $ref: '#/components/schemas/OrderStatus' }
+          style: form
+          explode: true
+      responses:
+        '200':
+          description: Daftar pesanan
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/StaffOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /staff/orders/{order}/status:
+    parameters:
+      - { name: order, in: path, required: true, schema: { type: integer } }
+    patch:
+      tags: [Staf]
+      summary: Ubah status pesanan
+      description: |
+        Alur satu arah: `paid` → `preparing` → `ready` → `completed`. Tidak boleh loncat atau mundur.
+        Dapur: `preparing` dan `ready`. Kasir: `completed`. Admin: semua langkah.
+        Role dicek lebih dulu (403), lalu validitas transisi (409).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [preparing, ready, completed]
+      responses:
+        '200':
+          description: Status diubah
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/StaffOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /webhooks/midtrans:
+    post:
+      tags: [Webhook]
+      summary: Notifikasi pembayaran dari Midtrans
+      description: |
+        Dipanggil oleh server Midtrans, bukan oleh frontend. Keamanannya lewat verifikasi
+        `signature_key` = SHA512(order_id + status_code + gross_amount + server_key).
+        Notifikasi duplikat aman (idempotent) dan nominal dicocokkan dengan catatan di database.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [order_id, status_code, gross_amount, signature_key, transaction_status]
+              properties:
+                order_id: { type: string, example: ORD-261014-ABCD1234 }
+                status_code: { type: string, example: '200' }
+                gross_amount: { type: string, example: '29000.00' }
+                signature_key: { type: string }
+                transaction_status:
+                  type: string
+                  enum: [capture, settlement, pending, deny, cancel, expire, failure]
+                transaction_id: { type: string }
+                payment_type: { type: string, example: qris }
+                fraud_status: { type: string, example: accept }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400':
+          description: Nominal tidak cocok
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '403':
+          description: Signature tidak valid
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token dari POST /auth/login
+
+  parameters:
+    QrToken:
+      name: qrToken
+      in: path
+      required: true
+      description: Token unik meja (dari URL di dalam QR code)
+      schema: { type: string }
+    OrderCode:
+      name: orderCode
+      in: path
+      required: true
+      schema: { type: string, example: ORD-261014-ABCD1234 }
+
+  responses:
+    Message:
+      description: Berhasil
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    Unauthorized:
+      description: Belum login atau token tidak valid
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    Forbidden:
+      description: Role tidak berhak mengakses
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    NotFound:
+      description: Data tidak ditemukan
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    Conflict:
+      description: Operasi bentrok dengan keadaan data saat ini
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+    ValidationError:
+      description: Validasi gagal
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    TooManyRequests:
+      description: Terlalu banyak request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Message' }
+
+  schemas:
+    Message:
+      type: object
+      properties:
+        message: { type: string }
+
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+
+    OrderStatus:
+      type: string
+      enum: [pending_payment, paid, preparing, ready, completed, cancelled]
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, cashier, kitchen] }
+
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 100, example: Mie }
+        sort_order: { type: integer, minimum: 0, example: 1 }
+
+    Category:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        sort_order: { type: integer }
+        menus_count: { type: integer }
+
+    MenuInput:
+      type: object
+      required: [category_id, name, price]
+      properties:
+        category_id: { type: integer }
+        name: { type: string, maxLength: 255 }
+        description: { type: string, nullable: true }
+        price: { type: integer, minimum: 0, description: Dalam Rupiah, example: 12000 }
+        image:
+          type: string
+          format: binary
+          description: jpg, jpeg, png, atau webp, maksimal 2 MB
+        has_spice_level: { type: boolean }
+        is_available: { type: boolean }
+
+    Menu:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        price: { type: integer }
+        image_url: { type: string, format: uri, nullable: true }
+        has_spice_level: { type: boolean }
+        is_available: { type: boolean }
+        category: { $ref: '#/components/schemas/Category' }
+
+    DiningTableInput:
+      type: object
+      required: [number]
+      properties:
+        number: { type: integer, minimum: 1, maximum: 999, example: 5 }
+        is_active: { type: boolean }
+
+    DiningTable:
+      type: object
+      properties:
+        id: { type: integer }
+        number: { type: integer }
+        is_active: { type: boolean }
+        order_url:
+          type: string
+          format: uri
+          description: URL frontend yang ada di dalam QR code
+        orders_count: { type: integer }
+
+    PublicMenu:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        price: { type: integer }
+        image_url: { type: string, format: uri, nullable: true }
+        has_spice_level: { type: boolean }
+
+    PublicCategory:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        slug: { type: string }
+        menus:
+          type: array
+          items: { $ref: '#/components/schemas/PublicMenu' }
+
+    CreateOrderRequest:
+      type: object
+      required: [items]
+      properties:
+        customer_name: { type: string, maxLength: 100, nullable: true }
+        notes: { type: string, maxLength: 500, nullable: true }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: object
+            required: [menu_id, quantity]
+            properties:
+              menu_id: { type: integer }
+              quantity: { type: integer, minimum: 1, maximum: 20 }
+              spice_level:
+                type: integer
+                minimum: 0
+                maximum: 5
+                description: Wajib untuk menu yang punya level pedas
+              notes: { type: string, maxLength: 255, nullable: true }
+      example:
+        customer_name: Budi
+        notes: Tanpa sambal tambahan
+        items:
+          - { menu_id: 1, quantity: 2, spice_level: 3 }
+          - { menu_id: 7, quantity: 1, notes: Es sedikit }
+
+    PublicOrder:
+      type: object
+      properties:
+        order_code: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        status_label: { type: string, example: Sedang dimasak }
+        payment_status:
+          type: string
+          nullable: true
+          enum: [pending, success, failed, expired]
+        table_number: { type: integer }
+        customer_name: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        total_amount: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              menu_name: { type: string }
+              price: { type: integer }
+              quantity: { type: integer }
+              spice_level: { type: integer, nullable: true }
+              notes: { type: string, nullable: true }
+              subtotal: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    StaffOrder:
+      type: object
+      properties:
+        id: { type: integer }
+        order_code: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        status_label: { type: string }
+        next_status:
+          type: string
+          nullable: true
+          description: Langkah berikutnya dalam alur, null jika sudah selesai
+        table_number: { type: integer }
+        customer_name: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        total_amount: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              menu_name: { type: string }
+              quantity: { type: integer }
+              spice_level: { type: integer, nullable: true }
+              notes: { type: string, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }

@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use Database\Factories\DiningTableFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
-
 class DiningTable extends Model
 {
-    /** @use HasFactory<\Database\Factories\DiningTableFactory> */
+    /** @use HasFactory<DiningTableFactory> */
     use HasFactory;
+
     protected $fillable = ['number', 'qr_token', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];
@@ -37,12 +38,14 @@ class DiningTable extends Model
     {
         $this->update(['qr_token' => Str::random(40)]);
     }
+
     public static function findActiveByToken(string $token): ?self
     {
         return static::where('qr_token', $token)
             ->where('is_active', true)
             ->first();
     }
+
     public function findOrderByCode(string $orderCode): ?Order
     {
         return $this->orders()->where('order_code', $orderCode)->first();

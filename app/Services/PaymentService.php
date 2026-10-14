@@ -1,21 +1,20 @@
 <?php
+
 namespace App\Services;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Events\OrderPaid;
+use App\Events\OrderStatusUpdated;
 use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Events\OrderPaid;
-use App\Events\OrderStatusUpdated;
 
 class PaymentService
 {
-    public function __construct(private MidtransService $midtrans)
-    {
-    }
+    public function __construct(private MidtransService $midtrans) {}
 
     public function createOrGetPayment(Order $order): Payment
     {

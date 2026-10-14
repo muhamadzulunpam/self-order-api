@@ -1,17 +1,16 @@
 
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Admin\CategoryController;
-use App\Http\Controllers\Api\Admin\MenuController;
 use App\Http\Controllers\Api\Admin\DiningTableController;
+use App\Http\Controllers\Api\Admin\MenuController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Customer\MenuController as CustomerMenuController;
 use App\Http\Controllers\Api\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\Api\Customer\PaymentController as CustomerPaymentController;
 use App\Http\Controllers\Api\MidtransWebhookController;
 use App\Http\Controllers\Api\Staff\OrderController as StaffOrderController;
-
+use Illuminate\Support\Facades\Route;
 
 // Authentication
 Route::prefix('auth')->group(function () {
