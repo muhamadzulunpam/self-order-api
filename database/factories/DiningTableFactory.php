@@ -18,7 +18,8 @@ class DiningTableFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'number' => fake()->unique()->numberBetween(1, 999),
+            'is_active' => true,
         ];
     }
 }
