@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
 
+
 class OrderController extends Controller
 {
     public function __construct(private OrderService $orders)
@@ -31,7 +32,7 @@ class OrderController extends Controller
     {
         $table = $this->resolveTable($qrToken);
 
-        $order = Order::with('items', 'diningTable')
+        $order = Order::with('items', 'diningTable', 'payment')
             ->where('dining_table_id', $table->id)
             ->where('order_code', $orderCode)
             ->first();

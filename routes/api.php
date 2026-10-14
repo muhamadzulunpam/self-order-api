@@ -8,6 +8,9 @@ use App\Http\Controllers\Api\Admin\MenuController;
 use App\Http\Controllers\Api\Admin\DiningTableController;
 use App\Http\Controllers\Api\Customer\MenuController as CustomerMenuController;
 use App\Http\Controllers\Api\Customer\OrderController as CustomerOrderController;
+use App\Http\Controllers\Api\Customer\PaymentController as CustomerPaymentController;
+use App\Http\Controllers\Api\MidtransWebhookController;
+
 
 // Authentication
 Route::prefix('auth')->group(function () {
@@ -38,4 +41,8 @@ Route::prefix('public')
         Route::post('tables/{qrToken}/orders', [CustomerOrderController::class, 'store'])
             ->middleware('throttle:create-order');
         Route::get('tables/{qrToken}/orders/{orderCode}', [CustomerOrderController::class, 'show']);
+        Route::post('tables/{qrToken}/orders/{orderCode}/pay', [CustomerPaymentController::class, 'store'])
+            ->middleware('throttle:create-order');
     });
+
+Route::post('webhooks/midtrans', MidtransWebhookController::class);
