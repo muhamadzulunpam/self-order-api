@@ -8,6 +8,8 @@ use App\Models\Payment;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Events\OrderPaid;
+use App\Events\OrderStatusUpdated;
 
 class PaymentService
 {
@@ -106,12 +108,14 @@ class PaymentService
                 $payment->status = $newStatus;
             }
 
+            $orderStatusChanged = null;
+
             if ($newStatus === PaymentStatus::Success) {
                 $payment->paid_at = now();
 
                 if ($order->status === OrderStatus::PendingPayment) {
                     $order->update(['status' => OrderStatus::Paid]);
-                    // Fitur 9: dispatch event OrderPaid di sini (setelah commit)
+                    $orderStatusChanged = OrderStatus::Paid;
                 } else {
                     Log::warning('Midtrans: pembayaran sukses untuk order yang tidak lagi pending', [
                         'order' => $order->order_code,
@@ -123,9 +127,18 @@ class PaymentService
                 && $order->status === OrderStatus::PendingPayment
             ) {
                 $order->update(['status' => OrderStatus::Cancelled]);
+                $orderStatusChanged = OrderStatus::Cancelled;
             }
 
             $payment->save();
+
+            if ($orderStatusChanged === OrderStatus::Paid) {
+                OrderPaid::dispatch($order);
+            }
+
+            if ($orderStatusChanged) {
+                OrderStatusUpdated::dispatch($order->order_code, $orderStatusChanged->value);
+            }
 
             return $payment;
         });

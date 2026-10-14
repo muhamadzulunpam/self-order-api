@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Customer\MenuController as CustomerMenuController;
 use App\Http\Controllers\Api\Customer\OrderController as CustomerOrderController;
 use App\Http\Controllers\Api\Customer\PaymentController as CustomerPaymentController;
 use App\Http\Controllers\Api\MidtransWebhookController;
+use App\Http\Controllers\Api\Staff\OrderController as StaffOrderController;
 
 
 // Authentication
@@ -43,6 +44,12 @@ Route::prefix('public')
         Route::get('tables/{qrToken}/orders/{orderCode}', [CustomerOrderController::class, 'show']);
         Route::post('tables/{qrToken}/orders/{orderCode}/pay', [CustomerPaymentController::class, 'store'])
             ->middleware('throttle:create-order');
+    });
+
+Route::middleware(['auth:sanctum', 'role:admin,cashier,kitchen'])
+    ->prefix('staff')
+    ->group(function () {
+        Route::get('orders', [StaffOrderController::class, 'index']);
     });
 
 Route::post('webhooks/midtrans', MidtransWebhookController::class);
