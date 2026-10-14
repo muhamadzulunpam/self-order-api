@@ -1,6 +1,7 @@
 <?php
 
 // tests/Feature/EndToEndOrderFlowTest.php
+
 namespace Tests\Feature;
 
 use App\Enums\OrderStatus;

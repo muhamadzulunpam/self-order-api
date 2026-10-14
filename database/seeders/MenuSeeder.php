@@ -1,6 +1,7 @@
 <?php
 
 // database/seeders/MenuSeeder.php
+
 namespace Database\Seeders;
 
 use App\Models\Category;
