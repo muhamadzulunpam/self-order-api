@@ -10,6 +10,8 @@ use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Validation\Rule;
+use App\Http\Requests\Staff\UpdateOrderStatusRequest;
+use App\Services\OrderService;
 
 class OrderController extends Controller
 {
@@ -34,5 +36,18 @@ class OrderController extends Controller
             ->get();
 
         return StaffOrderResource::collection($orders);
+    }
+    public function updateStatus(
+        UpdateOrderStatusRequest $request,
+        Order $order,
+        OrderService $orders
+    ): StaffOrderResource {
+        $updated = $orders->updateStatus(
+            $order,
+            OrderStatus::from($request->validated('status')),
+            $request->user()
+        );
+
+        return new StaffOrderResource($updated);
     }
 }

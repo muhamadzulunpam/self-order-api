@@ -18,6 +18,7 @@ class PublicOrderResource extends JsonResource
         return [
             'order_code' => $this->order_code,
             'status' => $this->status->value,
+            'status_label' => $this->status->label(),
             'table_number' => $this->diningTable->number,
             'customer_name' => $this->customer_name,
             'notes' => $this->notes,

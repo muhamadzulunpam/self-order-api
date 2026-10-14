@@ -50,6 +50,7 @@ Route::middleware(['auth:sanctum', 'role:admin,cashier,kitchen'])
     ->prefix('staff')
     ->group(function () {
         Route::get('orders', [StaffOrderController::class, 'index']);
+        Route::patch('orders/{order}/status', [StaffOrderController::class, 'updateStatus']);
     });
 
 Route::post('webhooks/midtrans', MidtransWebhookController::class);

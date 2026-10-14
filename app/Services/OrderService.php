@@ -9,6 +9,10 @@ use App\Models\Order;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Enums\UserRole;
+use App\Events\OrderStatusUpdated;
+use App\Events\StaffOrderUpdated;
+use App\Models\User;
 
 class OrderService
 {
@@ -81,5 +85,43 @@ class OrderService
         } while (Order::where('order_code', $code)->exists());
 
         return $code;
+    }
+    public function updateStatus(Order $order, OrderStatus $target, User $actor): Order
+    {
+        abort_unless(
+            $this->roleCanSet($actor->role, $target),
+            403,
+            'Role Anda tidak berhak mengubah pesanan ke status ini.'
+        );
+
+        $order = DB::transaction(function () use ($order, $target) {
+            $locked = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+
+            abort_unless(
+                $locked->status->canTransitionTo($target),
+                409,
+                "Pesanan berstatus '{$locked->status->label()}' tidak bisa diubah ke '{$target->label()}'."
+            );
+
+            $locked->update(['status' => $target]);
+
+            return $locked;
+        });
+
+        $order->load('items', 'diningTable', 'payment');
+
+        StaffOrderUpdated::dispatch($order);
+        OrderStatusUpdated::dispatch($order->order_code, $target->value);
+
+        return $order;
+    }
+
+    private function roleCanSet(UserRole $role, OrderStatus $target): bool
+    {
+        return match ($target) {
+            OrderStatus::Preparing, OrderStatus::Ready => in_array($role, [UserRole::Admin, UserRole::Kitchen], true),
+            OrderStatus::Completed => in_array($role, [UserRole::Admin, UserRole::Cashier], true),
+            default => false,
+        };
     }
 }
