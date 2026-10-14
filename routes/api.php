@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\MenuController;
 use App\Http\Controllers\Api\Admin\DiningTableController;
+use App\Http\Controllers\Api\Customer\MenuController as CustomerMenuController;
 
 // Authentication
 Route::prefix('auth')->group(function () {
@@ -27,4 +28,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])
         Route::apiResource('dining-tables', DiningTableController::class);
         Route::post('dining-tables/{diningTable}/regenerate-token', [DiningTableController::class, 'regenerateToken']);
         Route::get('dining-tables/{diningTable}/qr', [DiningTableController::class, 'qr']);
+    });
+
+Route::prefix('public')
+    ->middleware('throttle:120,1')
+    ->group(function () {
+        Route::get('tables/{qrToken}/menu', [CustomerMenuController::class, 'index']);
     });

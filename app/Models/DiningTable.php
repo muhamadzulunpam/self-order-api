@@ -37,4 +37,10 @@ class DiningTable extends Model
     {
         $this->update(['qr_token' => Str::random(40)]);
     }
+    public static function findActiveByToken(string $token): ?self
+    {
+        return static::where('qr_token', $token)
+            ->where('is_active', true)
+            ->first();
+    }
 }
