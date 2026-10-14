@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\MenuController;
 use App\Http\Controllers\Api\Admin\DiningTableController;
 use App\Http\Controllers\Api\Customer\MenuController as CustomerMenuController;
+use App\Http\Controllers\Api\Customer\OrderController as CustomerOrderController;
 
 // Authentication
 Route::prefix('auth')->group(function () {
@@ -34,4 +35,7 @@ Route::prefix('public')
     ->middleware('throttle:120,1')
     ->group(function () {
         Route::get('tables/{qrToken}/menu', [CustomerMenuController::class, 'index']);
+        Route::post('tables/{qrToken}/orders', [CustomerOrderController::class, 'store'])
+            ->middleware('throttle:create-order');
+        Route::get('tables/{qrToken}/orders/{orderCode}', [CustomerOrderController::class, 'show']);
     });
