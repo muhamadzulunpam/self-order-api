@@ -18,6 +18,8 @@ class StaffOrderResource extends JsonResource
             'id' => $this->id,
             'order_code' => $this->order_code,
             'status' => $this->status->value,
+            'status_label' => $this->status->label(),
+            'next_status' => $this->status->next()?->value,
             'table_number' => $this->diningTable->number,
             'customer_name' => $this->customer_name,
             'notes' => $this->notes,
