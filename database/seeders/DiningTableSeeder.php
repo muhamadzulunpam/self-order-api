@@ -4,19 +4,18 @@ namespace Database\Seeders;
 
 use App\Models\DiningTable;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 
 class DiningTableSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    /** Jumlah meja yang disiapkan. Ubah angka ini jika restoran punya lebih banyak meja. */
+    public const TABLE_COUNT = 20;
+
     public function run(): void
     {
-        foreach (range(1, 10) as $number) {
+        foreach (range(1, self::TABLE_COUNT) as $number) {
             DiningTable::firstOrCreate(
                 ['number' => $number],
-                ['qr_token' => (string) Str::uuid()]
+                ['qr_token' => DiningTable::stableToken($number)],
             );
         }
     }

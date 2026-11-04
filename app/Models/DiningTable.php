@@ -50,4 +50,12 @@ class DiningTable extends Model
     {
         return $this->orders()->where('order_code', $orderCode)->first();
     }
+    /**
+     * Token tetap untuk sebuah nomor meja. Diturunkan dari APP_KEY, jadi sama setiap kali seeder
+     * dijalankan di server yang sama, tetapi tidak bisa ditebak dari nomor mejanya.
+     */
+    public static function stableToken(int $number): string
+    {
+        return substr(hash_hmac('sha256', 'dining-table:'.$number, (string) config('app.key')), 0, 40);
+    }
 }

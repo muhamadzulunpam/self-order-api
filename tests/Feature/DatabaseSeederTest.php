@@ -35,7 +35,7 @@ class DatabaseSeederTest extends TestCase
         $this->assertSame(3, Category::count());
         $this->assertSame(9, Menu::count());
         $this->assertSame(1, Menu::where('is_available', false)->count());
-        $this->assertSame(10, DiningTable::count());
+        $this->assertSame(20, DiningTable::count());
     }
 
     public function test_seeder_can_run_twice_without_duplicates(): void
