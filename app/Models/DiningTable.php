@@ -50,6 +50,7 @@ class DiningTable extends Model
     {
         return $this->orders()->where('order_code', $orderCode)->first();
     }
+
     /**
      * Token tetap untuk sebuah nomor meja. Diturunkan dari APP_KEY, jadi sama setiap kali seeder
      * dijalankan di server yang sama, tetapi tidak bisa ditebak dari nomor mejanya.
